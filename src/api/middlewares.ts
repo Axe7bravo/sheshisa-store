@@ -1,11 +1,49 @@
+// src/api/middlewares.ts
+
 import { authenticate, defineMiddlewares } from "@medusajs/medusa";
-import deliveriesMiddlewares from "./deliveries/[id]/middlewares"
+import deliveriesMiddlewares from "./deliveries/[id]/middlewares"; // Assuming this is correct
+
+const isAllowed = (req, res, next) => {
+  const { restaurant_id, driver_id } = req.auth_context.app_metadata;
+
+  if (restaurant_id || driver_id) {
+    const user = {
+      actor_type: restaurant_id ? "restaurant" : "driver",
+      user_id: restaurant_id || driver_id,
+    };
+
+    req.user = user;
+
+    next();
+  } else {
+    res.status(403).json({
+      message: "Forbidden. Reason: No restaurant_id or driver_id in app_metadata",
+    });
+  }
+};
 
 export default defineMiddlewares({
   routes: [
+    // ✅ FIX: Added the new endpoint for retrieving a driver's profile
+    {
+      method: ["GET"],
+      matcher: "/store/drivers/me",
+      middlewares: [
+        authenticate(["driver"], "bearer"),
+        isAllowed,
+      ],
+    },
+    {
+      method: ["GET"],
+      matcher: "/store/users/me",
+      middlewares: [
+        authenticate(["driver", "restaurant"], "bearer"),
+        isAllowed,
+      ],
+    },
     {
       method: ["POST"],
-      matcher: "/users",
+      matcher: "/store/users", // ✅ FIX: Added "/store" prefix for consistency.
       middlewares: [
         authenticate(["driver", "restaurant"], "bearer", {
           allowUnregistered: true,
@@ -14,11 +52,11 @@ export default defineMiddlewares({
     },
     {
       method: ["POST", "DELETE"],
-      matcher: "/restaurants/:id/**",
+      matcher: "/store/restaurants/:id/**", // ✅ FIX: Added "/store" prefix for consistency.
       middlewares: [
         authenticate(["restaurant", "user"], "bearer"),
       ],
     },
-    ...deliveriesMiddlewares.routes
+    ...(deliveriesMiddlewares.routes || []), // ✅ FIX: Call .default if it is a default export.
   ],
-})
+});
