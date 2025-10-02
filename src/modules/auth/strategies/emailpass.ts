@@ -1,117 +1,54 @@
-import {
-  AuthIdentityDTO,
-  AuthenticationInput,
-  AuthenticationResponse,
-} from "@medusajs/framework/types"
-import { AbstractAuthModuleProvider, MedusaContext } from "@medusajs/framework/utils"
-import { EntityManager } from "@mikro-orm/core"
-import { AuthIdentityProviderService } from "@medusajs/framework/types"
+// src/strategies/custom-retrieve-strategy.ts
 
-/**
- * A copy of the Driver DTO, defined here for backend use.
- */
-export interface DriverDTO {
-  id: string
-  first_name: string
-  last_name: string
-  email: string
-  phone: string
-  avatar_url?: string
-  created_at: Date
-  updated_at: Date
-  actor_type?: "driver"
-}
+import { MedusaContainer } from "@medusajs/framework/types"
+import { Strategy as BearerStrategy } from "passport-http-bearer"
+import passport from "passport"
 
-/**
- * A copy of the Restaurant Admin DTO, defined here for backend use.
- */
-export interface RestaurantAdminDTO {
-  id: string
-  restaurant_id: string
-  first_name: string
-  last_name: string
-  email: string
-  created_at: Date
-  updated_at: Date
-  actor_type?: "restaurant"
-}
+const CUSTOM_RETRIEVE_STRATEGY = "custom-retrieve-strategy"
 
-/**
- * The expected payload for the authentication request.
- */
-interface AuthPayload {
-  email: string
-  password?: string
-  actor_type: "driver" | "restaurant"
-}
+export default (container: MedusaContainer) => {
+  passport.use(
+    CUSTOM_RETRIEVE_STRATEGY,
+    new BearerStrategy(async (token: string, done) => {
+      try {
+        // ✅ FIX: The token is already verified. Do not manually decode it.
+        const authIdentityService = container.resolve("authIdentityService") as {
+          retrieve: (token: string, options?: { relations?: string[] }) => Promise<{ user: { id: string, actor_type: "customer" | "restaurant" | "driver" } }>
+        }
+        const authIdentity = await authIdentityService.retrieve(token, {
+          relations: ["user"]
+        })
 
-/**
- * Custom authentication provider for email/password.
- * This strategy handles the initial authentication of users based on their
- * email and password for different actor types (driver, restaurant).
- */
-export class EmailPasswordStrategy extends AbstractAuthModuleProvider {
-  protected readonly manager_: EntityManager
+        const user = authIdentity.user as {
+          id: string,
+          actor_type: "customer" | "restaurant" | "driver"
+        }
 
-  constructor(
-    private readonly container: { manager: EntityManager }
-  ) {
-    super()
-    this.manager_ = container.manager
-  }
+        if (user.actor_type === "driver") {
+          const deliveryService = container.resolve("deliveryService") as {
+            retrieveByAuthIdentity: (authIdentityId: string) => Promise<any>
+          }
+          const driver = await deliveryService.retrieveByAuthIdentity(user.id)
+          if (!driver) {
+            return done(null, false)
+          }
+          return done(null, driver)
 
-  /**
-   * The `authenticate` method receives the payload from the login request.
-   * Its job is to find the user based on the provided credentials and return
-   * the `AuthIdentityDTO`. The Medusa framework then uses this DTO to
-   * retrieve the full actor profile.
-   * @param data The authentication request data from the framework.
-   * @param authIdentityProviderService The service for managing auth identities.
-   * @returns An AuthenticationResponse indicating success or failure.
-   */
-  async authenticate(
-    data: AuthenticationInput,
-    authIdentityProviderService: AuthIdentityProviderService
-  ): Promise<AuthenticationResponse> {
-    const { email, password, actor_type } = data.body as unknown as AuthPayload
+        } else if (user.actor_type === "restaurant") {
+          const restaurantService = container.resolve("restaurantService") as {
+            retrieveByAuthIdentity: (authIdentityId: string) => Promise<any>
+          }
+          const restaurant = await restaurantService.retrieveByAuthIdentity(user.id)
+          if (!restaurant) {
+            return done(null, false)
+          }
+          return done(null, restaurant)
+        }
 
-    // In a real-world scenario, you would hash and compare the password.
-
-    let actor: DriverDTO | RestaurantAdminDTO | null = null
-
-    if (actor_type === "driver") {
-      actor = await this.manager_
-        .getRepository<DriverDTO>("driver")
-        .findOne({ email })
-    } else if (actor_type === "restaurant") {
-      actor = await this.manager_
-        .getRepository<RestaurantAdminDTO>("restaurantAdmin")
-        .findOne({ email })
-    }
-
-    if (!actor) {
-      return {
-        success: false,
-        error: "Authentication failed. User not found.",
+        return done(null, false)
+      } catch (error) {
+        return done(error)
       }
-    }
-
-    // A real implementation would validate the password here.
-    // const isPasswordValid = await bcrypt.compare(password, actor.password_hash);
-    // if (!isPasswordValid) return { success: false, error: "Authentication failed. Invalid password." };
-
-    const authIdentity: AuthIdentityDTO = {
-      id: actor.id,
-      app_metadata: {
-        actor_type,
-        id: actor.id,
-      },
-      provider_identities: [],
-    }
-
-    return {
-      success: true,
-      authIdentity,
-    }
-  }
+    })
+  )
 }

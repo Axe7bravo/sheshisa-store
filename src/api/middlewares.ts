@@ -24,18 +24,10 @@ const isAllowed = (req, res, next) => {
 
 export default defineMiddlewares({
   routes: [
-    // ✅ FIX: Added the new endpoint for retrieving a driver's profile
+
     {
       method: ["GET"],
-      matcher: "/store/drivers/me",
-      middlewares: [
-        authenticate(["driver"], "bearer"),
-        isAllowed,
-      ],
-    },
-    {
-      method: ["GET"],
-      matcher: "/store/users/me",
+      matcher: "/users/me",
       middlewares: [
         authenticate(["driver", "restaurant"], "bearer"),
         isAllowed,
@@ -43,7 +35,7 @@ export default defineMiddlewares({
     },
     {
       method: ["POST"],
-      matcher: "/store/users", // ✅ FIX: Added "/store" prefix for consistency.
+      matcher: "/users", // ✅ FIX: Added "/store" prefix for consistency.
       middlewares: [
         authenticate(["driver", "restaurant"], "bearer", {
           allowUnregistered: true,

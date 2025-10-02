@@ -1,5 +1,3 @@
-// medusa-config.ts
-
 import { loadEnv, defineConfig } from '@medusajs/framework/utils';
 
 loadEnv(process.env.NODE_ENV || 'development', process.cwd());
@@ -22,6 +20,27 @@ export default defineConfig({
     },
     {
       resolve: "./src/modules/delivery", 
+    },
+    // ✅ This is the necessary addition.
+    {
+      resolve: "@medusajs/medusa/auth",
+      options: {
+        providers: [
+          {
+            resolve: "@medusajs/medusa/auth-emailpass",
+            id: "emailpass",
+            options: {
+              strict: false,
+              strategies: [
+              {
+                resolve: "./src/modules/auth/strategies/emailpass.ts",
+              },
+              ],
+            },
+          },
+        ],
+        strategies: [],
+      },
     },
   ],
 });
