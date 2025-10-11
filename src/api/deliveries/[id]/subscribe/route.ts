@@ -44,7 +44,7 @@ const workflowSubHandler = (data: any) => {
 
 await workflowEngine.subscribe({
   workflowId: handleDeliveryWorkflowId,
-  transactionId: delivery.transaction_id,
+  transactionId: delivery.transaction_id ?? undefined,
   subscriber: workflowSubHandler,
 })
 }

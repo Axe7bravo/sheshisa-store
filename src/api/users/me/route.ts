@@ -28,7 +28,7 @@ export const GET = async (
 
   if (actor_type === "restaurant") {
     const service = req.scope.resolve(RESTAURANT_MODULE);
-    const user = await service.retrieveRestaurantAdmin(user_id);
+    const user = await service.findRestaurantAdminById(user_id);
     return res.json({ user });
   }
 
